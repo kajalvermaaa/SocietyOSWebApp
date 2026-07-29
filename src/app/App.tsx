@@ -2,6 +2,7 @@ import { useState } from "react";
 import { IssueDeskScreen } from "./components/IssueDeskScreen";
 import { CommitteeDashboard } from "./components/CommitteeDashboard";
 import type { Issue } from "./types";
+import { classifyIssue, findLikelyDuplicate } from "./lib/classifyIssue";
 
 {/* MARKER-MAKE-KIT-INVOKED */}
 
@@ -21,20 +22,34 @@ export default function App() {
   const [nextId, setNextId] = useState(initialIssues.length + 1);
 
   function addIssue(summary: string, flatNumber?: string) {
-    const newIssue: Issue = {
-      id: nextId,
-      summary,
-      category: "Other",
-      urgency: "Medium",
-      affectedResidents: 1,
-      status: "Open",
-      flatNumber,
-      reportedAt: Date.now(),
-    };
-    setIssues((prev) => [...prev, newIssue]);
+    const { category, urgency } = classifyIssue(summary);
+
+    setIssues((prev) => {
+      const duplicate = findLikelyDuplicate(summary, category, prev);
+
+      if (duplicate) {
+        return prev.map((issue) =>
+          issue.id === duplicate.id
+            ? { ...issue, affectedResidents: issue.affectedResidents + 1 }
+            : issue
+        );
+      }
+
+      const newIssue: Issue = {
+        id: nextId,
+        summary,
+        category,
+        urgency,
+        affectedResidents: 1,
+        status: "Open",
+        flatNumber,
+        reportedAt: Date.now(),
+      };
+      return [...prev, newIssue];
+    });
+
     setNextId((n) => n + 1);
   }
-
   function updateIssue(id: number, changes: Partial<Issue>) {
     setIssues((prev) =>
       prev.map((issue) => (issue.id === id ? { ...issue, ...changes } : issue))
