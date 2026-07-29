@@ -16,28 +16,29 @@ export default async function handler(request: Request) {
     });
   }
 
-  const { summary, existingIssues } = await request.json();
+  const body = await request.json();
+  const summary = body.summary;
+  const existingIssues = body.existingIssues || [];
 
-  const existingList = (existingIssues || [])
-    .map((i: any) => id ${i.id} [${i.category}]: "${i.summary}")
+  const existingList = existingIssues
+    .map(function (i: any) {
+      return "id " + i.id + " [" + i.category + "]: \"" + i.summary + "\"";
+    })
     .join("\n");
 
-  const prompt = `You are triaging maintenance complaints for a residential society, submitted casually the way people post in a WhatsApp group.
-
-New submission: "${summary}"
-
-Existing OPEN issues (id, category, summary):
-${existingList || "(none)"}
-
-Do the following:
-1. category: one of "Lift", "Plumbing", "Electrical", "Security", "Other"
-2. cleanSummary: a clean one-line restatement of the new submission
-3. urgency: "High" (genuine safety/blocking risk, even if the tone is casual or sarcastic), "Medium" (functional problem, not urgent), or "Low" (cosmetic/minor)
-4. isSpam: true if this is not a genuine maintenance/safety/communal-area complaint (e.g. unrelated chatter, selling items), otherwise false
-5. duplicateOfId: if this submission describes the SAME underlying problem as one of the existing open issues above (even if worded completely differently, e.g. "lift stopped" vs "elevator stuck"), return that issue's id as a number. Otherwise return null. Be careful not to merge genuinely different problems in the same category (e.g. a stuck lift vs a noisy lift are different issues).
-
-Respond with ONLY valid JSON, no markdown formatting, no code fences, nothing else:
-{"category": "", "cleanSummary": "", "urgency": "", "isSpam": false, "duplicateOfId": null}`;
+  const prompt =
+    "You are triaging maintenance complaints for a residential society, submitted casually the way people post in a WhatsApp group.\n\n" +
+    "New submission: \"" + summary + "\"\n\n" +
+    "Existing OPEN issues (id, category, summary):\n" +
+    (existingList || "(none)") + "\n\n" +
+    "Do the following:\n" +
+    "1. category: one of \"Lift\", \"Plumbing\", \"Electrical\", \"Security\", \"Other\"\n" +
+    "2. cleanSummary: a clean one-line restatement of the new submission\n" +
+    "3. urgency: \"High\" (genuine safety/blocking risk, even if the tone is casual or sarcastic), \"Medium\" (functional problem, not urgent), or \"Low\" (cosmetic/minor)\n" +
+    "4. isSpam: true if this is not a genuine maintenance/safety/communal-area complaint (e.g. unrelated chatter, selling items), otherwise false\n" +
+    "5. duplicateOfId: if this submission describes the SAME underlying problem as one of the existing open issues above (even if worded completely differently, e.g. \"lift stopped\" vs \"elevator stuck\"), return that issue's id as a number. Otherwise return null. Be careful not to merge genuinely different problems in the same category (e.g. a stuck lift vs a noisy lift are different issues).\n\n" +
+    "Respond with ONLY valid JSON, no markdown formatting, no code fences, nothing else:\n" +
+    "{\"category\": \"\", \"cleanSummary\": \"\", \"urgency\": \"\", \"isSpam\": false, \"duplicateOfId\": null}";
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -55,8 +56,20 @@ Respond with ONLY valid JSON, no markdown formatting, no code fences, nothing el
     });
 
     const data = await anthropicRes.json();
-    const rawText = data?.content?.[0]?.text ?? "{}";
-    const cleaned = rawText.replace(/json|/g, "").trim();
+    const rawText = data && data.content && data.content[0] && data.content[0].text ? data.content[0].text : "{}";
+
+    const fence = String.fromCharCode(96, 96, 96);
+    let cleaned = rawText.trim();
+    if (cleaned.indexOf(fence) === 0) {
+      const firstNewline = cleaned.indexOf("\n");
+      cleaned = firstNewline !== -1 ? cleaned.slice(firstNewline + 1) : cleaned.slice(fence.length);
+    }
+    const lastFenceIndex = cleaned.lastIndexOf(fence);
+    if (lastFenceIndex !== -1) {
+      cleaned = cleaned.slice(0, lastFenceIndex);
+    }
+    cleaned = cleaned.trim();
+
     const parsed = JSON.parse(cleaned);
 
     return new Response(JSON.stringify(parsed), {
