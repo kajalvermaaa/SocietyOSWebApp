@@ -2,7 +2,6 @@ import { useState } from "react";
 import { IssueDeskScreen } from "./components/IssueDeskScreen";
 import { CommitteeDashboard } from "./components/CommitteeDashboard";
 import type { Issue } from "./types";
-import { classifyIssue, findLikelyDuplicate } from "./lib/classifyIssue";
 
 {/* MARKER-MAKE-KIT-INVOKED */}
 
@@ -21,23 +20,49 @@ export default function App() {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [nextId, setNextId] = useState(initialIssues.length + 1);
 
-  function addIssue(summary: string, flatNumber?: string) {
-    const { category, urgency } = classifyIssue(summary);
+  async function addIssue(summary: string, flatNumber?: string) {
+    const openIssues = issues.filter((i) => i.status !== "Resolved");
+
+    let result: { category?: string; cleanSummary?: string; urgency?: string; isSpam?: boolean; duplicateOfId?: number | null } = {};
+
+    try {
+      const res = await fetch("/api/classify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          summary,
+          existingIssues: openIssues.map((i) => ({ id: i.id, category: i.category, summary: i.summary })),
+        }),
+      });
+      result = await res.json();
+    } catch (err) {
+      result = {};
+    }
+
+    if (result.isSpam) {
+      return;
+    }
+
+    const category = (result.category as Issue["category"]) || "Other";
+    const urgency = (result.urgency as Issue["urgency"]) || "Medium";
+    const cleanSummary = result.cleanSummary || summary;
+    const duplicateOfId = result.duplicateOfId ?? null;
 
     setIssues((prev) => {
-      const duplicate = findLikelyDuplicate(summary, category, prev);
-
-      if (duplicate) {
-        return prev.map((issue) =>
-          issue.id === duplicate.id
-            ? { ...issue, affectedResidents: issue.affectedResidents + 1 }
-            : issue
-        );
+      if (duplicateOfId != null) {
+        const match = prev.find((i) => i.id === duplicateOfId);
+        if (match) {
+          return prev.map((issue) =>
+            issue.id === duplicateOfId
+              ? { ...issue, affectedResidents: issue.affectedResidents + 1 }
+              : issue
+          );
+        }
       }
 
       const newIssue: Issue = {
         id: nextId,
-        summary,
+        summary: cleanSummary,
         category,
         urgency,
         affectedResidents: 1,
