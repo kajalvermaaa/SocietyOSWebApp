@@ -141,13 +141,13 @@ export function IssueDeskScreen({ onSubmit }: Props) {
             />
           </div>
 
-          <button
+         <button
             type="submit"
-            disabled={!description.trim()}
+            disabled={!description.trim() || isSubmitting}
             className="mt-1 w-full rounded-md bg-primary text-primary-foreground py-3 text-sm font-medium hover:bg-primary/90 active:bg-primary/80 transition-colors disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
-            Submit issue
-            <ArrowRight className="w-4 h-4" />
+            {isSubmitting ? "Submitting..." : "Submit issue"}
+            {!isSubmitting && <ArrowRight className="w-4 h-4" />}
           </button>
 
           <p className="text-xs text-muted-foreground text-center leading-relaxed">
