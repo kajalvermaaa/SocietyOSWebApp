@@ -2,19 +2,25 @@ import { useState } from "react";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 
 interface Props {
-  onSubmit: (summary: string, flatNumber?: string) => void;
+  onSubmit: (summary: string, flatNumber?: string) => Promise<void> | void;
 }
 
 export function IssueDeskScreen({ onSubmit }: Props) {
   const [description, setDescription] = useState("");
   const [flatNumber, setFlatNumber] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!description.trim()) return;
-    onSubmit(description.trim(), flatNumber.trim() || undefined);
-    setSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(description.trim(), flatNumber.trim() || undefined);
+      setSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleReset() {
