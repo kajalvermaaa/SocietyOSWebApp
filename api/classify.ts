@@ -1,5 +1,7 @@
 export const config = { runtime: "edge" };
 
+declare const process: { env: Record<string, string | undefined> };
+
 export default async function handler(request: Request) {
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -40,7 +42,7 @@ export default async function handler(request: Request) {
     "Respond with ONLY valid JSON, no markdown formatting, no code fences, nothing else:\n" +
     "{\"category\": \"\", \"cleanSummary\": \"\", \"urgency\": \"\", \"isSpam\": false, \"duplicateOfId\": null}";
 
- try {
+  try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -62,35 +64,6 @@ export default async function handler(request: Request) {
         { status: 502, headers: { "content-type": "application/json" } }
       );
     }
-
-    const data = await anthropicRes.json();
-    const rawText = data && data.content && data.content[0] && data.content[0].text ? data.content[0].text : "{}";
-
-    const fence = String.fromCharCode(96, 96, 96);
-    let cleaned = rawText.trim();
-    if (cleaned.indexOf(fence) === 0) {
-      const firstNewline = cleaned.indexOf("\n");
-      cleaned = firstNewline !== -1 ? cleaned.slice(firstNewline + 1) : cleaned.slice(fence.length);
-    }
-    const lastFenceIndex = cleaned.lastIndexOf(fence);
-    if (lastFenceIndex !== -1) {
-      cleaned = cleaned.slice(0, lastFenceIndex);
-    }
-    cleaned = cleaned.trim();
-
-    const parsed = JSON.parse(cleaned);
-
-    return new Response(JSON.stringify(parsed), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: "Classification failed", details: String(err) }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
-  }
-}
 
     const data = await anthropicRes.json();
     const rawText = data && data.content && data.content[0] && data.content[0].text ? data.content[0].text : "{}";
